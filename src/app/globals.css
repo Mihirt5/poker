@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: radial-gradient(circle at 50% 0%, #14532d 0%, #0b1f14 55%, #07120c 100%);
+  color: #f8fafc;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* Felt table surface */
+.felt {
+  background:
+    radial-gradient(ellipse at center, #11804a 0%, #0c5e36 55%, #0a4f2d 100%);
+  box-shadow:
+    inset 0 0 60px rgba(0, 0, 0, 0.45),
+    0 18px 50px rgba(0, 0, 0, 0.55);
+  border: 10px solid #5a3a1b;
+  outline: 3px solid #2e1d0d;
+}
+
+.btn {
+  @apply rounded-lg px-4 py-2 font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40;
+}
+.btn-primary {
+  @apply btn bg-emerald-500 text-emerald-950 hover:bg-emerald-400;
+}
+.btn-danger {
+  @apply btn bg-rose-600 text-white hover:bg-rose-500;
+}
+.btn-neutral {
+  @apply btn bg-slate-700 text-slate-100 hover:bg-slate-600;
+}
+.btn-gold {
+  @apply btn bg-amber-400 text-amber-950 hover:bg-amber-300;
+}
+
+.input {
+  @apply w-full rounded-lg border border-slate-600 bg-slate-900/70 px-3 py-2 text-slate-100 outline-none placeholder:text-slate-500 focus:border-emerald-400;
+}
+
+/* Custom range slider */
+input[type="range"].chip-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 9999px;
+  background: #1e293b;
+}
+input[type="range"].chip-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: #f5c518;
+  border: 2px solid #78350f;
+  cursor: pointer;
+}
+input[type="range"].chip-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: #f5c518;
+  border: 2px solid #78350f;
+  cursor: pointer;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
