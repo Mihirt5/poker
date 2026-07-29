@@ -1,4 +1,4 @@
-import { ApiError, authPlayer, err, ok } from "@/lib/api";
+import { ApiError, authPlayer, err, isAdmin, ok } from "@/lib/api";
 import { ACTION_TIMEOUT_MS, applyTimeout, canDealNextHand, startHand } from "@/lib/poker/engine";
 import { toPublicState } from "@/lib/poker/serialize";
 import { getRoom, saveRoom, withRoomLock } from "@/lib/store";
@@ -11,6 +11,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ code: st
     const url = new URL(req.url);
     const playerId = url.searchParams.get("playerId") ?? "";
     const token = url.searchParams.get("token") ?? "";
+    const adminSecret = url.searchParams.get("admin") ?? "";
     const code = (await params).code.toUpperCase();
 
     let state = await getRoom(code);
@@ -42,7 +43,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ code: st
       });
     }
 
-    return ok(toPublicState(state, playerId));
+    return ok(toPublicState(state, playerId, { revealAll: isAdmin(adminSecret) }));
   } catch (e) {
     if (e instanceof ApiError) return err(e.message, e.status);
     console.error(e);

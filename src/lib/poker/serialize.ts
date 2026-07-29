@@ -2,7 +2,13 @@ import type { GameState, PublicPlayer, PublicState } from "@/lib/types";
 import { ACTION_TIMEOUT_MS } from "./engine";
 
 // Build the view of the game that a specific player is allowed to see.
-export function toPublicState(state: GameState, viewerId: string): PublicState {
+// When `opts.revealAll` is set (authenticated admin), every player's hole
+// cards and the remaining deck order are exposed.
+export function toPublicState(
+  state: GameState,
+  viewerId: string,
+  opts: { revealAll?: boolean } = {}
+): PublicState {
   const now = Date.now();
   const reveal = state.stage === "showdown" || state.stage === "handover";
 
@@ -11,7 +17,8 @@ export function toPublicState(state: GameState, viewerId: string): PublicState {
     .map((p) => {
       const isYou = p.id === viewerId;
       const showCards =
-        p.holeCards.length > 0 && (isYou || (reveal && p.inHand && !p.folded));
+        p.holeCards.length > 0 &&
+        (opts.revealAll || isYou || (reveal && p.inHand && !p.folded));
       return {
         id: p.id,
         name: p.name,
@@ -45,8 +52,15 @@ export function toPublicState(state: GameState, viewerId: string): PublicState {
   const maxRaiseTo = you ? you.bet + you.chips : 0;
   const canRaise = isYourTurn && !!you && you.chips > toCall;
 
+  // Deck is stored so deck.pop() deals the LAST element; reverse it so the
+  // admin sees index 0 as the very next card to come out.
+  const admin = opts.revealAll
+    ? { deck: [...state.deck].reverse(), rig: state.rig ?? {} }
+    : undefined;
+
   return {
     code: state.code,
+    admin,
     hostId: state.hostId,
     youId: viewerId,
     isHost: state.hostId === viewerId,

@@ -1,5 +1,5 @@
 import type { ActionType, Card, GameState, Player, Pot, ShowdownEntry } from "@/lib/types";
-import { makeDeck, shuffle } from "./cards";
+import { makeDeck, RANK_VALUE, rankOf, shuffle, weightedShuffle } from "./cards";
 import { compareRank, evaluateBest } from "./evaluator";
 
 export const MAX_PLAYERS = 10;
@@ -200,8 +200,13 @@ export function startHand(state: GameState) {
     return;
   }
 
-  // Reset hand state.
-  state.deck = shuffle(makeDeck());
+  // Reset hand state. A weighted shuffle biases which cards come out first
+  // when the admin has set per-rank odds; otherwise a fair shuffle.
+  const weights = state.rig?.weights;
+  state.deck =
+    weights && Object.keys(weights).length > 0
+      ? weightedShuffle(makeDeck(), weights)
+      : shuffle(makeDeck());
   state.community = [];
   state.pots = [];
   state.showdown = [];
@@ -260,11 +265,7 @@ export function startHand(state: GameState) {
     order.push(p);
     s = nextSeat(state, s, eligiblePred);
   }
-  for (let round = 0; round < 2; round++) {
-    for (const p of order) {
-      p.holeCards.push(state.deck.pop()!);
-    }
-  }
+  dealHoleCards(state, order);
 
   // Post blinds.
   const sb = playerBySeat(state, sbSeat)!;
@@ -298,6 +299,77 @@ function setToAct(state: GameState, seat: number) {
   }
   state.toActSeat = target;
   state.toActSince = Date.now();
+}
+
+// Deal two hole cards to each player in `order`, honoring the secret rig:
+// explicit forced hands and a favored player who gets a premium starting hand.
+function dealHoleCards(state: GameState, order: Player[]) {
+  const rig = state.rig;
+  const forced: Record<string, Card[]> = {};
+
+  // 1. Explicit forced hole cards (one-time; consumed below).
+  if (rig?.holeCards) {
+    for (const p of order) {
+      const cards = rig.holeCards[p.id];
+      if (cards && cards.length === 2) forced[p.id] = [...cards];
+    }
+  }
+
+  // 2. Favored player gets a premium hand (persists until cleared).
+  if (rig?.favorPlayerId && !forced[rig.favorPlayerId]) {
+    const fav = order.find((p) => p.id === rig.favorPlayerId);
+    if (fav) {
+      const premium = pickPremiumHand(state.deck, Object.values(forced).flat());
+      if (premium) forced[fav.id] = premium;
+    }
+  }
+
+  // Remove every forced card from the deck so it can't be dealt twice.
+  const used = new Set(Object.values(forced).flat());
+  if (used.size > 0) state.deck = state.deck.filter((c) => !used.has(c));
+
+  // Assign forced cards up front.
+  for (const p of order) {
+    if (forced[p.id]) p.holeCards.push(...forced[p.id]);
+  }
+
+  // Deal the remaining players their two cards from the top of the deck.
+  for (let round = 0; round < 2; round++) {
+    for (const p of order) {
+      if (p.holeCards.length <= round) p.holeCards.push(state.deck.pop()!);
+    }
+  }
+
+  // Explicit hole rigs are single-use; the favored-player rig persists.
+  if (rig?.holeCards) rig.holeCards = {};
+}
+
+// Pick a strong two-card starting hand from the available deck.
+function pickPremiumHand(deck: Card[], exclude: Card[]): Card[] | null {
+  const avail = deck.filter((c) => !exclude.includes(c));
+  const byRank = (r: string) => avail.filter((c) => rankOf(c) === r);
+  for (const r of ["A", "K", "Q", "J"]) {
+    const cs = byRank(r);
+    if (cs.length >= 2) return [cs[0], cs[1]]; // premium pocket pair
+  }
+  const a = byRank("A")[0];
+  const k = byRank("K")[0];
+  if (a && k) return [a, k]; // big slick
+  const sorted = [...avail].sort(
+    (x, y) => RANK_VALUE[rankOf(y)] - RANK_VALUE[rankOf(x)]
+  );
+  return sorted.length >= 2 ? [sorted[0], sorted[1]] : null;
+}
+
+// Arrange the live deck so the given cards are dealt next, in order.
+// Used by the admin panel to set the upcoming community cards.
+export function forceNextCards(state: GameState, cards: Card[]) {
+  const want = cards.filter(Boolean);
+  if (want.length === 0) return;
+  const rest = state.deck.filter((c) => !want.includes(c));
+  // deck.pop() takes the last element, so push the wanted cards reversed:
+  // pop() then yields want[0], want[1], want[2], …
+  state.deck = [...rest, ...[...want].reverse()];
 }
 
 // ---------- actions ----------

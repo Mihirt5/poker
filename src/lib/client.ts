@@ -88,12 +88,27 @@ export async function joinRoom(input: {
   return parse(res);
 }
 
-export async function fetchState(code: string, id: Identity): Promise<PublicState> {
+export async function fetchState(
+  code: string,
+  id: Identity,
+  adminSecret?: string
+): Promise<PublicState> {
   const qs = new URLSearchParams({ playerId: id.playerId, token: id.token });
+  if (adminSecret) qs.set("admin", adminSecret);
   const res = await fetch(`/api/room/${code}/state?${qs.toString()}`, {
     cache: "no-store",
   });
   return parse(res);
+}
+
+// Fire a god-mode command. Resolves to the full (revealed) admin state.
+export async function sendAdmin(
+  code: string,
+  id: Identity,
+  secret: string,
+  command: Record<string, unknown>
+): Promise<PublicState> {
+  return post(code, "admin", id, { secret, command });
 }
 
 async function post(code: string, path: string, id: Identity, extra: Record<string, unknown> = {}) {

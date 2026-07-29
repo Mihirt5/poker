@@ -14,14 +14,23 @@ import {
   rememberName,
   saveIdentity,
   sendAction,
+  sendAdmin,
   startGame,
   type Identity,
 } from "@/lib/client";
 import CommunityBoard from "@/components/CommunityBoard";
 import PlayerSeat from "@/components/PlayerSeat";
 import ActionControls from "@/components/ActionControls";
+import AdminPanel from "@/components/AdminPanel";
 
 const POLL_MS = 1800;
+
+// Type this on the table to reveal the hidden god-mode panel.
+const UNLOCK_SEQUENCE = "godmode";
+
+function adminKey(code: string) {
+  return `holdem:admin:${code.toUpperCase()}`;
+}
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -36,6 +45,9 @@ export default function RoomPage() {
   const [now, setNow] = useState(Date.now());
   const [copied, setCopied] = useState(false);
 
+  // Hidden god-mode: secret unlocked via the keystroke sequence.
+  const [adminSecret, setAdminSecret] = useState<string | null>(null);
+
   // Join form (when no identity yet)
   const [joinName, setJoinName] = useState("");
   const [joining, setJoining] = useState(false);
@@ -45,13 +57,46 @@ export default function RoomPage() {
   useEffect(() => {
     setIdentity(loadIdentity(code));
     setJoinName(recallName());
+    // Restore a previously entered admin secret for this room (session only).
+    try {
+      const saved = sessionStorage.getItem(adminKey(code));
+      if (saved) setAdminSecret(saved);
+    } catch {
+      /* ignore */
+    }
   }, [code]);
+
+  // Listen for the secret unlock sequence typed anywhere on the table.
+  useEffect(() => {
+    let buffer = "";
+    function onKey(e: KeyboardEvent) {
+      if (e.key.length !== 1) return; // ignore modifiers/arrows/etc.
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      buffer = (buffer + e.key.toLowerCase()).slice(-UNLOCK_SEQUENCE.length);
+      if (buffer === UNLOCK_SEQUENCE) {
+        buffer = "";
+        const existing = adminSecret ?? sessionStorage.getItem(adminKey(code)) ?? "";
+        const secret = window.prompt("God-mode passcode:", existing);
+        if (secret) {
+          try {
+            sessionStorage.setItem(adminKey(code), secret);
+          } catch {
+            /* ignore */
+          }
+          setAdminSecret(secret);
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [code, adminSecret]);
 
   const refresh = useCallback(async () => {
     if (!identity || pollingRef.current) return;
     pollingRef.current = true;
     try {
-      const s = await fetchState(code, identity);
+      const s = await fetchState(code, identity, adminSecret ?? undefined);
       setState(s);
       setClockOffset(s.serverNow - Date.now());
       setError("");
@@ -65,7 +110,7 @@ export default function RoomPage() {
     } finally {
       pollingRef.current = false;
     }
-  }, [code, identity]);
+  }, [code, identity, adminSecret]);
 
   // Poll loop
   useEffect(() => {
@@ -157,6 +202,29 @@ export default function RoomPage() {
     router.push("/");
   }
 
+  const doAdmin = useCallback(
+    async (command: Record<string, unknown>) => {
+      if (!identity || !adminSecret) return;
+      try {
+        const s = await sendAdmin(code, identity, adminSecret, command);
+        setState(s);
+        setError("");
+      } catch (e: any) {
+        setError(e.message || "Admin command failed.");
+      }
+    },
+    [code, identity, adminSecret]
+  );
+
+  function lockAdmin() {
+    setAdminSecret(null);
+    try {
+      sessionStorage.removeItem(adminKey(code));
+    } catch {
+      /* ignore */
+    }
+  }
+
   function copyInvite() {
     const link = `${window.location.origin}/?code=${code}`;
     navigator.clipboard?.writeText(link).then(
@@ -207,18 +275,23 @@ export default function RoomPage() {
   }
 
   return (
-    <GameView
-      state={state}
-      serverNow={serverNow}
-      busy={busy}
-      error={error}
-      copied={copied}
-      onAct={act}
-      onStart={handleStart}
-      onNext={handleNext}
-      onLeave={handleLeave}
-      onCopy={copyInvite}
-    />
+    <>
+      <GameView
+        state={state}
+        serverNow={serverNow}
+        busy={busy}
+        error={error}
+        copied={copied}
+        onAct={act}
+        onStart={handleStart}
+        onNext={handleNext}
+        onLeave={handleLeave}
+        onCopy={copyInvite}
+      />
+      {adminSecret && state.admin && (
+        <AdminPanel state={state} onCommand={doAdmin} onClose={lockAdmin} />
+      )}
+    </>
   );
 }
 

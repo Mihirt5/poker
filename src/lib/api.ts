@@ -26,6 +26,14 @@ export function authPlayer(state: GameState, playerId: unknown, token: unknown):
   return p;
 }
 
+// The secret that unlocks the hidden god-mode admin panel. Override with the
+// ADMIN_SECRET env var; falls back to a default for local play.
+export const ADMIN_SECRET = process.env.ADMIN_SECRET || "letmein";
+
+export function isAdmin(secret: unknown): boolean {
+  return typeof secret === "string" && secret.length > 0 && secret === ADMIN_SECRET;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status = 400) {

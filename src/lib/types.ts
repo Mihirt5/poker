@@ -42,11 +42,24 @@ export interface ShowdownEntry {
   won: number; // chips won
 }
 
+// Secret "god-mode" configuration applied when dealing. Never sent to
+// non-admin viewers. Used by the hidden admin panel to rig hands.
+export interface RigConfig {
+  // Force a specific player's hole cards on the NEXT hand: playerId -> 2 cards.
+  holeCards?: Record<string, Card[]>;
+  // Give this player a premium starting hand on every hand until cleared.
+  favorPlayerId?: string | null;
+  // Per-rank shuffle weight multipliers (e.g. { A: 5, K: 3 }). Higher = the
+  // rank is more likely to be dealt early. Missing ranks default to 1.
+  weights?: Record<string, number>;
+}
+
 export interface GameState {
   code: string;
   hostId: string;
   players: Player[];
   deck: Card[];
+  rig?: RigConfig; // secret; stripped from every public view
   community: Card[];
   stage: Stage;
   dealerSeat: number;
@@ -76,12 +89,21 @@ export type PublicPlayer = Omit<Player, "token" | "holeCards"> & {
   hasCards: boolean; // whether they hold (hidden) cards
 };
 
+// Extra view sent ONLY to an authenticated admin (hidden god-mode panel).
+export interface AdminView {
+  // Remaining deck in deal order — index 0 is the very next card dealt.
+  deck: Card[];
+  // Current rig configuration in effect.
+  rig: RigConfig;
+}
+
 export interface PublicState {
   code: string;
   hostId: string;
   youId: string;
   isHost: boolean;
   players: PublicPlayer[];
+  admin?: AdminView; // present only for an authenticated admin viewer
   community: Card[];
   stage: Stage;
   dealerSeat: number;
